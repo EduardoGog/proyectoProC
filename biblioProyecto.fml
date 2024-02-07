@@ -1,0 +1,6 @@
+#name	number	type	flag	comment
+OUTPUT	5	string	-	-
+NUMPAGO	10	long	-	- numero de pago
+NOMDES	20	string	-	- nombre destinatario
+NOMREM	30	string	-	- nombre remitente
+CONCEPTO	40	string	-	- concepto de pago

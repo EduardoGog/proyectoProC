@@ -1,0 +1,443 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <atmi.h>
+#include <userlog.h>
+#include <fml32.h>
+#include <tx.h>
+#include "biblioProyecto.fml.h"
+#include <sqlca.h>
+#include <sqlda.h>
+#include <oraca.h>
+
+EXEC SQL INCLUDE SQLCA;
+EXEC SQL BEGIN DECLARE SECTION;
+EXEC SQL DECLARE ORACLE2 DATABASE;
+EXEC SQL END DECLARE SECTION;
+
+typedef struct {
+    char usuario_DB[50];
+    char password_DB[50];
+    char name_DB[50];
+} paramConexion;
+
+int conectando_aBD(paramConexion *spA_paramCon) {
+    int iRetValue = 0;
+    EXEC SQL BEGIN DECLARE SECTION;
+    char zaO_usuario_[50];
+    char zaO_password[50];
+    char zaO_dbnameBD[50];
+    EXEC SQL END DECLARE SECTION;
+    strcpy(zaO_usuario_, spA_paramCon->usuario_DB);
+    strcpy(zaO_password, spA_paramCon->password_DB);
+    strcpy(zaO_dbnameBD, spA_paramCon->name_DB);
+    EXEC SQL WHENEVER SQLERROR DO iRetValue = sqlError("Error conexion");
+    EXEC SQL CONNECT :zaO_usuario_ IDENTIFIED by :zaO_password 
+    AT ORACLE2 USING :zaO_dbnameBD;
+    return iRetValue;
+}
+
+void cierraConexion() {
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    if (!sqlca.sqlcode) {
+        EXEC SQL AT ORACLE2 COMMIT WORK RELEASE;
+    } else {
+        EXEC SQL AT ORACLE2 ROLLBACK RELEASE;
+    }
+}
+
+int sqlError(const char*zpA_cadError) {
+    char zaL_errorOra[512];
+    long unsigned int ivL_longCadn;
+    long unsigned int ivL_longMens;
+    sqlglm(zaL_errorOra, &ivL_longCadn, &ivL_longMens);
+    printf("ERROR DE SISTEMA, ocurrió un error en BD \n");
+    printf("Error encontrado : %s \n", zpA_cadError);
+    printf("Error de Oracle : %s \n", zaL_errorOra);
+    return -1;
+}
+char *ajustaCampos(char zaA_Campo[2000]) {
+    int ivL_obtenTam;
+    int ivL_contIter;
+    int ivL_siEspacs;
+    int ivL_noEspacs;
+
+    ivL_obtenTam = strlen(zaA_Campo);
+    ivL_contIter = 0;
+    ivL_siEspacs = 0;
+    ivL_noEspacs = 0;
+
+    for (ivL_contIter = 0; ivL_contIter < ivL_obtenTam && zaA_Campo[ivL_contIter] == ' '; ivL_contIter++) {
+        ivL_siEspacs++;
+    }
+
+    if (ivL_siEspacs == ivL_obtenTam) {
+        return (char *)"\0";
+    } else {
+        if (ivL_siEspacs < ivL_obtenTam) {
+            for (ivL_contIter = ivL_obtenTam - 1; ivL_contIter >= 0 && zaA_Campo[ivL_contIter] == ' '; ivL_contIter--) {
+                ivL_noEspacs++;
+            }
+            zaA_Campo[ivL_obtenTam - ivL_noEspacs] = '\0';
+            return (char *)zaA_Campo;
+        }
+    }
+}
+
+int tpsvrinit(int argc, char *argv[]) {
+    int iRetValue = 0;
+    paramConexion svL_paramCon;
+
+    /* Se inicializan acciones en esta funcion */
+    userlog("Iniciando srvTarea4BD");
+    return (iRetValue);
+}
+
+void INSERT_PAGO_FML32(TPSVCINFO *rqst){
+    FLDLEN32 flen;
+    paramConexion svL_paramCon;
+    char msgbuf[256];
+    int iRetValue = 0;
+
+    EXEC SQL BEGIN DECLARE SECTION;
+    int t_numpago;
+    char t_nomdes[51];
+    char t_nomrem[151];
+    char t_concepto[251];
+    EXEC SQL END DECLARE SECTION;
+
+    FBFR32* fbfr = (FBFR32*)rqst->data;
+   
+    strcpy(svL_paramCon.usuario_DB, "system");
+    strcpy(svL_paramCon.password_DB, "Lasangreazul2393");
+    strcpy(svL_paramCon.name_DB, "EDGG");
+
+    memset(&t_numpago, 0x00, sizeof(t_numpago));
+    memset(t_nomdes, 0x00, sizeof(t_nomdes));
+    memset(t_nomrem, 0x00, sizeof(t_nomrem));
+    memset(t_concepto, 0x00, sizeof(t_concepto));
+
+    userlog("Servicio INSERT_PAGO_FML32 Invocado");
+    
+    if (Fget32(fbfr, NUMPAGO, 0, (char*)&t_numpago, 0) < 0) {
+        userlog("Error Fget32(NUMPAGO): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog(" NUMPAGO: [%d]", t_numpago);
+
+    if (Fget32(fbfr, NOMDES, 0, t_nomdes, 0) < 0) {
+        userlog("Error Fget32(NOMDES): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog(" Nombre de destinatario : [%s]", t_nomdes);
+
+    if (Fget32(fbfr, NOMREM, 0, t_nomrem, 0) < 0) {
+        userlog("Error Fget32(NOMREM): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog(" Nombre de remitente: [%s]", t_nomrem);
+
+    if (Fget32(fbfr, CONCEPTO, 0, t_concepto, 0) < 0) {
+        userlog("Error Fget32(CONCEPTO): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog(" Concepto : [%s]", t_concepto);
+
+    userlog("Conectando a la BD");
+    conectando_aBD(&svL_paramCon);
+   
+    EXEC SQL AT ORACLE2
+    INSERT INTO pagos (numpago, nomdes, nomrem, concepto)
+    VALUES (:t_numpago, :t_nomdes, :t_nomrem, :t_concepto);
+
+    if (sqlca.sqlcode != 0) {
+        sprintf(msgbuf, "Fallo insert: sqlcode = %d(%s)\n", sqlca.sqlcode,sqlca.sqlerrm.sqlerrmc);
+        sqlError("Error al realizar Insert");
+        Fchg32(fbfr, OUTPUT, 0, msgbuf, 0);
+        cierraConexion();
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+   
+    strcpy(msgbuf, "Insert exitoso!");
+    userlog("Insert exitoso");
+    Fchg32(fbfr, OUTPUT, 0, msgbuf, 0);
+    cierraConexion();
+    tpreturn(TPSUCCESS, 0, rqst->data, strlen(rqst->data), 0);
+}
+
+void SELECT_PAGO_FML32(TPSVCINFO *rqst) {
+    FLDLEN32 flen;
+    paramConexion svL_paramCon;
+    char msgbuf[256];
+    int iRetValue = 0;
+
+    EXEC SQL BEGIN DECLARE SECTION;
+    int t_numpago;
+    char t_nomdes[51];
+    char t_nomrem[151];
+    char t_concepto[251];
+    EXEC SQL END DECLARE SECTION;
+
+    FBFR32* fbfr = (FBFR32*)rqst->data;
+
+    strcpy(svL_paramCon.usuario_DB, "system");
+    strcpy(svL_paramCon.password_DB, "Lasangreazul2393");
+    strcpy(svL_paramCon.name_DB, "EDGG");
+    t_numpago = 0;
+    
+    memset(t_nomrem, 0x00, sizeof(t_nomrem));
+    memset(t_nomdes, 0x00, sizeof(t_nomdes));
+    memset(t_concepto, 0x00, sizeof(t_concepto));
+    memset(&t_numpago, 0x00, sizeof(t_numpago));
+
+    userlog("Servicio SELECT_PAGO_FML32 Invocado");
+
+    /* Obtenemos los campos */
+    if (Fget32(fbfr, NUMPAGO, 0, (char *)&t_numpago, 0) < 0) {
+        userlog("Error Fget32(NUMPAGO): %d", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog("Buscar numero de pago: [%d]", t_numpago);
+
+    Finit32(fbfr, Fsizeof32(fbfr));
+
+    userlog("Conectando a la BD");
+    conectando_aBD(&svL_paramCon);
+
+    /* Declaramos y Abrimos Cursor */
+    EXEC SQL AT ORACLE2 DECLARE cu_remnom CURSOR FOR 
+        SELECT numpago, nomrem, nomdes, concepto 
+        FROM pagos
+        WHERE numpago = :t_numpago;
+
+    if (sqlca.sqlcode != 0) {
+        userlog("Error Declare Cursor: %d-%s", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+
+    EXEC SQL AT ORACLE2 OPEN cu_remnom;
+    if (sqlca.sqlcode != 0) {
+        userlog("Error Open Cursor: %d-%s", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+
+    EXEC SQL AT ORACLE2 FETCH cu_remnom INTO :t_numpago, :t_nomrem, :t_nomdes, :t_concepto;
+
+    while (sqlca.sqlcode == 0) {
+        Fadd32(fbfr, NUMPAGO, (char*)&t_numpago, 0);
+        userlog(" Numero de pago: [%d]", t_numpago);
+        Fadd32(fbfr, NOMREM, ajustaCampos(t_nomrem), 0);
+        userlog(" Nombre de remitente : [%s]", ajustaCampos(t_nomrem));
+        Fadd32(fbfr, NOMDES, ajustaCampos(t_nomdes), 0);
+        userlog(" Nombre de destinatario : [%s]", ajustaCampos(t_nomdes));
+        Fadd32(fbfr, CONCEPTO, ajustaCampos(t_concepto), 0);
+        userlog(" Concepto de pago: [%s]", ajustaCampos(t_concepto));
+        EXEC SQL AT ORACLE2 FETCH cu_remnom INTO :t_numpago, :t_nomrem, :t_nomdes, :t_concepto;
+    }
+
+    EXEC SQL CLOSE cu_remnom;
+    userlog("Select exitoso");
+    // Fchg32(fbfr, OUTPUT, 0, msgbuf, 0);
+    cierraConexion();
+    tpreturn(TPSUCCESS, 0, (char *)fbfr, sizeof(fbfr), 0);
+}
+
+void SELECTALL_PAGO_FML32(TPSVCINFO *rqst) {
+    FLDLEN32 flen;
+    paramConexion svL_paramCon;
+    char msgbuf[256];
+    int iRetValue = 0;
+
+    EXEC SQL BEGIN DECLARE SECTION;
+    int t_numpago;
+    char t_nomdes[51];
+    char t_nomrem[151];
+    char t_concepto[251];
+    EXEC SQL END DECLARE SECTION;
+
+    FBFR32* fbfr = (FBFR32*)rqst->data;
+
+    strcpy(svL_paramCon.usuario_DB, "system");
+    strcpy(svL_paramCon.password_DB, "Lasangreazul2393");
+    strcpy(svL_paramCon.name_DB, "EDGG");
+    t_numpago = 0;
+    
+    memset(t_nomrem, 0x00, sizeof(t_nomrem));
+    memset(t_nomdes, 0x00, sizeof(t_nomdes));
+    memset(t_concepto, 0x00, sizeof(t_concepto));
+
+    userlog("Servicio SELECTALL_PAGO_FML32 Invocado");
+
+    /* Obtenemos los campos */
+    if (Fget32(fbfr, CONCEPTO, 0, t_concepto, 0) < 0) {
+        userlog("Error Fget32(CONCEPTO): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog("Buscar registros con el concepto: [%s]", t_concepto);
+
+    Finit32(fbfr, Fsizeof32(fbfr));
+
+    userlog("Conectando a la BD");
+    conectando_aBD(&svL_paramCon);
+
+    /* Declaramos y Abrimos Cursor */
+    EXEC SQL AT ORACLE2 DECLARE cu_concept CURSOR FOR 
+        SELECT numpago, nomrem, nomdes, concepto 
+        FROM pagos
+        WHERE concepto = :t_concepto;
+
+    if (sqlca.sqlcode != 0) {
+        userlog("Error Declare Cursor: %d-%s", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+
+    EXEC SQL AT ORACLE2 OPEN cu_concept;
+    if (sqlca.sqlcode != 0) {
+        userlog("Error Open Cursor: %d-%s", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+
+    EXEC SQL AT ORACLE2 FETCH cu_concept INTO :t_numpago, :t_nomrem, :t_nomdes, :t_concepto;
+
+    while (sqlca.sqlcode == 0) {
+        Fadd32(fbfr, NUMPAGO, (char*)&t_numpago, 0);
+        userlog(" Numero de pago: [%d]", t_numpago);
+        Fadd32(fbfr, NOMREM, ajustaCampos(t_nomrem), 0);
+        userlog(" Nombre de remitente : [%s]", ajustaCampos(t_nomrem));
+        Fadd32(fbfr, NOMDES, ajustaCampos(t_nomdes), 0);
+        userlog(" Nombre de destinatario : [%s]", ajustaCampos(t_nomdes));
+        Fadd32(fbfr, CONCEPTO, ajustaCampos(t_concepto), 0);
+        userlog(" Concepto de pago: [%s]", ajustaCampos(t_concepto));
+        EXEC SQL AT ORACLE2 FETCH cu_concept INTO :t_numpago, :t_nomrem, :t_nomdes, :t_concepto;
+    }
+
+    EXEC SQL CLOSE cu_remnom;
+    userlog("Select exitoso");
+    // Fchg32(fbfr, OUTPUT, 0, msgbuf, 0);
+    cierraConexion();
+    tpreturn(TPSUCCESS, 0, (char *)fbfr, sizeof(fbfr), 0);
+}
+
+void UPDATE_PAGO_FML32(TPSVCINFO *rqst){
+    FLDLEN32 flen;
+    paramConexion svL_paramCon;
+    char msgbuf[256];
+    int iRetValue = 0;
+
+    EXEC SQL BEGIN DECLARE SECTION;
+    int t_numpago;
+    char t_nomdes[51];
+    char t_nomrem[151];
+    char t_concepto[251];
+    EXEC SQL END DECLARE SECTION;
+
+    FBFR32 *fbfr = (FBFR32 *) rqst->data;
+
+    strcpy(svL_paramCon.usuario_DB, "system");
+    strcpy(svL_paramCon.password_DB, "Lasangreazul2393");
+    strcpy(svL_paramCon.name_DB, "EDGG");
+  
+    memset(&t_numpago, 0x00, sizeof(t_numpago));
+    memset(t_nomdes, 0x00, sizeof(t_nomdes));
+    memset(t_nomrem, 0x00, sizeof(t_nomrem));
+    memset(t_concepto, 0x00, sizeof(t_concepto));
+   
+    userlog("Servicio UPDATE_PAGO_FML32 Invocado");
+
+    if(Fget32(fbfr, NUMPAGO, 0, (char *) &t_numpago, 0) < 0){
+        userlog("Error Fget32(NUMPAGO): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog("Numero de pago: [%d]", t_numpago);
+
+    if(Fget32(fbfr, NOMDES, 0, t_nomdes, 0) < 0){
+        userlog("Error Fget32(NOMDES): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog("Nombre destinatario: [%s]", t_nomdes);
+
+    if(Fget32(fbfr, NOMREM, 0, t_nomrem, 0) < 0){
+        userlog("Error Fget32(NOMREM): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog("Nombre remitente: [%s]", t_nomrem);
+
+    if(Fget32(fbfr, CONCEPTO, 0, t_concepto, 0) < 0){
+        userlog("Error Fget32(CONCEPTO): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+    userlog("Concepto: [%s]", t_concepto);
+
+    userlog("Conectando a la BD");
+    conectando_aBD(&svL_paramCon);
+
+    EXEC SQL AT ORACLE2
+    UPDATE pagos
+    SET nomdes = :t_nomdes, nomrem = :t_nomrem, concepto = :t_concepto
+    WHERE numpago = :t_numpago;
+
+     if(sqlca.sqlcode != 0){
+        sprintf(msgbuf, "Fallo actualizacion: sqlcode = %d(%s)\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+        sqlError("Error al realizar Update");
+        Fchg32(fbfr, OUTPUT, 0, msgbuf, 0);
+        cierraConexion();
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+ 
+    strcpy(msgbuf, "Actualizacion exitosa!");
+    userlog("Actualizacion exitosa");
+    Fchg32(fbfr, OUTPUT, 0, msgbuf, 0);
+    cierraConexion();
+    tpreturn(TPSUCCESS, 0, rqst->data, strlen(rqst->data), 0);
+}
+
+void DELETE_PAGO_FML32(TPSVCINFO *rqst){
+    FLDLEN32 flen;
+    paramConexion svL_paramCon;
+    char msgbuf[256];
+    int iRetValue = 0;
+  
+    EXEC SQL BEGIN DECLARE SECTION;
+    int t_numpago;
+    EXEC SQL END DECLARE SECTION;
+
+    FBFR32 *fbfr = (FBFR32 *) rqst->data;
+
+    strcpy(svL_paramCon.usuario_DB, "system");
+    strcpy(svL_paramCon.password_DB, "Lasangreazul2393");
+    strcpy(svL_paramCon.name_DB, "EDGG");
+
+    memset(&t_numpago, 0x00, sizeof(t_numpago));
+
+    userlog("Servicio DELETE_PAGO_FML32 Invocado");
+
+    if(Fget32(fbfr, NUMPAGO, 0, (char *) &t_numpago, 0) < 0){
+        userlog("Error Fget32(NUMPAGO): %s", Fstrerror32(Ferror32));
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+ 
+    userlog("Numero de pago: [%d]", t_numpago);
+    userlog("Conectando a la BD");
+  
+    conectando_aBD(&svL_paramCon);
+
+    EXEC SQL AT ORACLE2
+    DELETE FROM pagos WHERE numpago = :t_numpago;
+
+    if(sqlca.sqlcode != 0){
+        sprintf(msgbuf, "Fallo eliminacion: sqlcode = %d(%s)\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+        sqlError("Error al realizar Delete");
+        Fchg32(fbfr, OUTPUT, 0, msgbuf, 0);
+        cierraConexion();
+        tpreturn(TPFAIL, 0, rqst->data, 0L, 0);
+    }
+ 
+    strcpy(msgbuf, "Eliminacion exitosa!");
+    userlog("Eliminacion exitosa");
+    Fchg32(fbfr, OUTPUT, 0, msgbuf, 0);
+    cierraConexion();
+    tpreturn(TPSUCCESS, 0, rqst->data, strlen(rqst->data), 0);
+}
+
+

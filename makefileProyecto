@@ -1,0 +1,60 @@
+# Variables
+PROC = $(ORACLE_HOME)/bin/proc
+PROC_CFLAGS = code=ANSI_C
+PROCINCLUDES = include=include include=/usr/include include=/usr/lib/gcc/x86_64-redhat-linux/4.8.2/include include=/usr/include/linux sys_include=/usr/include include=../inc
+PROCFLAGS = $(PROC_CFLAGS) $(PROCINCLUDES)
+
+# Directorios/Rutas
+BIN = ../bin
+OBJ = ../obj
+SRC = ../src
+INC = ../inc
+FML = ../fml
+CC = gcc
+
+# Generacion de Aplicacion
+all: campos_fml precompila srvProyecto cliProyecto
+
+# Compilacion de Campos FML
+campos_fml: $(FML)/biblioProyecto.fml
+	mkfldhdr32 $(FML)/biblioProyecto.fml
+	mv biblioProyecto.fml.h $(INC)
+
+# Precompilación
+precompila:
+	@echo "Precompilando ..."
+	$(PROC) $(PROCFLAGS) include=/usr/include/c++/4.8.2/x86_64-redhat-linux include=$(ORACLE_HOME)/precomp/public include=$(ORACLE_HOME)/rdbms/public include=../inc include=$(TUXDIR)/include $(SRC)/srvProyecto.pc
+
+# Generacion de Servidores
+srvProyecto: $(OBJ)/srvProyecto.o
+	@echo Compilando el servidor srvProyecto
+	buildserver -v -f $(OBJ)/srvProyecto.o \
+		-f "-I$(INC)" \
+		-l "-L$(ORACLE_HOME)/lib" \
+		-o "$(BIN)/srvProyecto -lclntsh" \
+		-s INSERT_PAGO_FML32,SELECT_PAGO_FML32,SELECTALL_PAGO_FML32,UPDATE_PAGO_FML32,DELETE_PAGO_FML32
+
+# Generacion de Clientes
+cliProyecto: $(OBJ)/cliProyecto.o
+	@echo Compilando el cliente cliProyecto
+	buildclient -f $(OBJ)/cliProyecto.o -o $(BIN)/cliProyecto
+
+# Generacion de Ficheros Objeto
+$(OBJ)/srvProyecto.o: $(SRC)/srvProyecto.c
+	@echo "Genera objetos ..."
+	$(CC) -c -I/usr/include/c++/4.8.2/x86_64-redhat-linux \
+		-I$(ORACLE_HOME)/precomp/public -I$(ORACLE_HOME)/rdbms/public -I../inc \
+		-I$(TUXDIR)/include -L$(ORACLE_HOME)/lib -L$(TUXDIR)/lib $(SRC)/srvProyecto.c -o \
+		$(OBJ)/srvProyecto.o -lclntsh -lfml32 -ltux
+
+$(OBJ)/cliProyecto.o: $(SRC)/cliProyecto.c
+	$(CC) -c -I../inc -I$(TUXDIR)/include $(SRC)/cliProyecto.c -o \
+		$(OBJ)/cliProyecto.o
+
+# Borrado
+cleanAll:
+	rm $(OBJ)/*.o
+
+cleanElem:
+	rm $(OBJ)/srvProyecto.o $(OBJ)/srvProyecto.o
+
