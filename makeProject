@@ -1,0 +1,61 @@
+# Variables
+PROC = $(ORACLE_HOME)/bin/proc
+PROC_CFLAGS = code=ANSI_C
+PROCINCLUDES = include=include include=/usr/include include=/usr/lib/gcc/x86_64-redhat-linux/4.8.2/include include=/usr/include/linux sys_include=/usr/include include=../inc
+PROCFLAGS = $(PROC_CFLAGS) $(PROCINCLUDES)
+BIN = ../bin
+OBJ = ../obj
+SRC = ../src
+INC = ../inc
+FML = ../fml
+CC = gcc
+GTK_FLAGS = `pkg-config --cflags --libs gtk+-3.0`  # Flags para GTK
+
+# Generación de la Aplicación
+all: campos_fml precompila srvProyecto clienteProyecto
+
+# Compilación de Campos FML
+campos_fml: $(FML)/biblioProyecto.fml
+	mkfldhdr32 $(FML)/biblioProyecto.fml
+	mv biblioProyecto.fml.h $(INC)
+
+# Precompilación
+precompila:
+	@echo "Precompilando ..."
+	$(PROC) $(PROCFLAGS) include=/usr/include/c++/4.8.2/x86_64-redhat-linux include=$(ORACLE_HOME)/precomp/public include=$(ORACLE_HOME)/rdbms/public include=../inc include=$(TUXDIR)/include $(SRC)/srvProyecto.pc
+
+# Generación de Servidores
+srvProyecto: $(OBJ)/srvProyecto.o
+	@echo Compilando el servidor srvProyecto
+	buildserver -v -f $(OBJ)/srvProyecto.o \
+		-l "-L$(ORACLE_HOME)/lib -lclntsh -lfml32 -ltux `pkg-config --libs gtk+-3.0`" \
+		-o "$(BIN)/srvProyecto" \
+		-s INSERT_PAGO_FML32,SELECT_PAGO_FML32,SELECTALL_PAGO_FML32,UPDATE_PAGO_FML32,DELETE_PAGO_FML32
+
+# Generación de Clientes
+clienteProyecto: $(OBJ)/clienteProyecto.o
+	@echo Compilando el cliente clienteProyecto
+	buildclient -f $(OBJ)/clienteProyecto.o -o $(BIN)/clienteProyecto \
+		-l "`pkg-config --libs gtk+-3.0`"  # Agregar las bibliotecas de GTK
+
+# Generación de Ficheros Objeto
+$(OBJ)/srvProyecto.o: $(SRC)/srvProyecto.c
+	@echo "Generando objetos ..."
+	$(CC) -c -I/usr/include/c++/4.8.2/x86_64-redhat-linux \
+		-I$(ORACLE_HOME)/precomp/public -I$(ORACLE_HOME)/rdbms/public -I../inc \
+		-I$(TUXDIR)/include -L$(ORACLE_HOME)/lib -L$(TUXDIR)/lib $(SRC)/srvProyecto.c -o \
+		$(OBJ)/srvProyecto.o $(GTK_FLAGS)  # Agregar las banderas de GTK
+
+$(OBJ)/clienteProyecto.o: $(SRC)/clienteProyecto.c
+	$(CC) -c -I../inc -I$(TUXDIR)/include $(SRC)/clienteProyecto.c -o \
+		$(OBJ)/clienteProyecto.o $(GTK_FLAGS)  # Agregar las banderas de GTK
+
+# Limpieza
+cleanAll:
+	rm $(OBJ)/*.o
+
+cleanElem:
+	rm $(OBJ)/srvProyecto.o $(OBJ)/clienteProyecto.o
+
+
+
