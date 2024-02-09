@@ -21,6 +21,12 @@ typedef struct {
     GtkWidget *output_label_search;
     GtkWidget *num_entry;
     GtkWidget *output_label;
+
+    GtkWidget *num_entry_update;
+    GtkWidget *nomdes_entry_update;
+    GtkWidget *nomrem_entry_update;
+    GtkWidget *concepto_entry_update;
+    GtkWidget *output_label_update;
 } pagos;
 
 // Función para enviar la solicitud de inserción al servidor
@@ -205,14 +211,77 @@ void enviar_solicitud(GtkWidget *widget, pagos *pgs) {
     tpterm();
 }
 
+// Función para enviar la solicitud de actualización al servidor
+void enviar_solicitud_actualizacion(GtkWidget *widget, pagos *pgs) {
+    long lvL_tamLongt;
+    gchar msgbuf[1024];
+
+    // Obtener los valores ingresados en los campos de entrada
+    const gchar *num_pago = gtk_entry_get_text(GTK_ENTRY(pgs->num_entry_update));
+    const gchar *nom_des = gtk_entry_get_text(GTK_ENTRY(pgs->nomdes_entry_update));
+    const gchar *nom_rem = gtk_entry_get_text(GTK_ENTRY(pgs->nomrem_entry_update));
+    const gchar *concepto = gtk_entry_get_text(GTK_ENTRY(pgs->concepto_entry_update));
+
+    // Convertir los valores a los tipos necesarios
+    pgs->numpago = atoi(num_pago);
+    strncpy(pgs->nomdes, nom_des, sizeof(pgs->nomdes));
+    strncpy(pgs->nomrem, nom_rem, sizeof(pgs->nomrem));
+    strncpy(pgs->concepto, concepto, sizeof(pgs->concepto));
+
+    // Conectar con el servidor Tuxedo
+    if (tpinit((TPINIT *)NULL) == -1) {
+        gtk_label_set_text(GTK_LABEL(pgs->output_label_update), "Error en la conexión");
+        return;
+    }
+
+    // Reservar espacio para el buffer FML
+    FBFR32 *fbfr;
+    if ((fbfr = (FBFR32 *)tpalloc("FML32", NULL, 1024)) == NULL) {
+        gtk_label_set_text(GTK_LABEL(pgs->output_label_update), "Error reservando espacio para el buffer FML");
+        tpterm();
+        return;
+    }
+
+    // Agregar los datos al buffer FML
+    if (Fchg32(fbfr, NUMPAGO, 0, (char *)&pgs->numpago, 0) < 0 ||
+        Fchg32(fbfr, NOMDES, 0, pgs->nomdes, 0) < 0 ||
+        Fchg32(fbfr, NOMREM, 0, pgs->nomrem, 0) < 0 ||
+        Fchg32(fbfr, CONCEPTO, 0, pgs->concepto, 0) < 0) {
+        gtk_label_set_text(GTK_LABEL(pgs->output_label_update), "Error actualizando campos FML");
+        tpfree((char *)fbfr);
+        tpterm();
+        return;
+    }
+
+    // Invocar el servicio 'UPDATE_PAGO_FML32'
+    if (tpcall("UPDATE_PAGO_FML32", (char *)fbfr, 0, (char **)&fbfr, &lvL_tamLongt, 0L) == -1) {
+        gtk_label_set_text(GTK_LABEL(pgs->output_label_update), "Error en la llamada al servicio");
+        tpfree((char *)fbfr);
+        tpterm();
+        return;
+    }
+
+    // Obtener y mostrar la respuesta del servidor
+    FLDLEN32 flen = sizeof(msgbuf);
+    Fget32(fbfr, OUTPUT, 0, (char *)msgbuf, &flen);
+    gtk_label_set_text(GTK_LABEL(pgs->output_label_update), (const gchar *)msgbuf);
+
+    // Liberar el buffer y desconectar del servidor
+    tpfree((char *)fbfr);
+    tpterm();
+}
+
+
 int main(int argc, char *argv[]) {
     GtkWidget *window;
     GtkWidget *box_insert;
     GtkWidget *box_search;
+    GtkWidget *box_update;
     GtkWidget *notebook;
     GtkWidget *label;
     GtkWidget *button_insert;
     GtkWidget *button_search;
+    GtkWidget *button_update;
     GtkWidget *button;
     pagos pgs;
 
@@ -290,6 +359,46 @@ int main(int argc, char *argv[]) {
     pgs.output_label_search = gtk_label_new("");
     gtk_box_pack_start(GTK_BOX(box_search), pgs.output_label_search, FALSE, FALSE, 0);
 
+    // Pestaña de actualización
+    box_update = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(box_update), 10);
+
+    label = gtk_label_new("Actualizar Pago");
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), box_update, label);
+
+    // Crear etiqueta y campo de entrada para el número de pago (Actualización)
+    label = gtk_label_new("Número de pago:");
+    gtk_box_pack_start(GTK_BOX(box_update), label, FALSE, FALSE, 0);
+    pgs.num_entry_update = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(box_update), pgs.num_entry_update, FALSE, FALSE, 0);
+
+    // Crear etiqueta y campo de entrada para el nombre del destinatario (Actualización)
+    label = gtk_label_new("Nombre del destinatario:");
+    gtk_box_pack_start(GTK_BOX(box_update), label, FALSE, FALSE, 0);
+    pgs.nomdes_entry_update = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(box_update), pgs.nomdes_entry_update, FALSE, FALSE, 0);
+
+    // Crear etiqueta y campo de entrada para el nombre del remitente (Actualización)
+    label = gtk_label_new("Nombre del remitente:");
+    gtk_box_pack_start(GTK_BOX(box_update), label, FALSE, FALSE, 0);
+    pgs.nomrem_entry_update = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(box_update), pgs.nomrem_entry_update, FALSE, FALSE, 0);
+
+    // Crear etiqueta y campo de entrada para el concepto de pago (Actualización)
+    label = gtk_label_new("Concepto de pago:");
+    gtk_box_pack_start(GTK_BOX(box_update), label, FALSE, FALSE, 0);
+    pgs.concepto_entry_update = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(box_update), pgs.concepto_entry_update, FALSE, FALSE, 0);
+
+    // Crear un botón para enviar la solicitud de actualización
+    button_update = gtk_button_new_with_label("Actualizar Pago");
+    g_signal_connect(button_update, "clicked", G_CALLBACK(enviar_solicitud_actualizacion), &pgs);
+    gtk_box_pack_start(GTK_BOX(box_update), button_update, FALSE, FALSE, 0);
+
+    // Crear una etiqueta para mostrar los resultados (Actualización)
+    pgs.output_label_update = gtk_label_new("");
+    gtk_box_pack_start(GTK_BOX(box_update), pgs.output_label_update, FALSE, FALSE, 0);
+
     // Pestaña de solicitud
     GtkWidget *box_solicitud = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
     gtk_container_set_border_width(GTK_CONTAINER(box_solicitud), 10);
@@ -312,8 +421,8 @@ int main(int argc, char *argv[]) {
     pgs.output_label = gtk_label_new("");
     gtk_box_pack_start(GTK_BOX(box_solicitud), pgs.output_label, FALSE, FALSE, 0);
 
-    // Mostrar la ventana y empezar el bucle de eventos
     gtk_widget_show_all(window);
+
     gtk_main();
 
     return 0;
