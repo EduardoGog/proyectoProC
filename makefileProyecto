@@ -11,6 +11,7 @@ SRC = ../src
 INC = ../inc
 FML = ../fml
 CC = gcc
+GTK_FLAGS = `pkg-config --cflags --libs gtk+-3.0`  # Flags para GTK
 
 # Generacion de Aplicacion
 all: campos_fml precompila srvProyecto cliProyecto
@@ -30,7 +31,7 @@ srvProyecto: $(OBJ)/srvProyecto.o
 	@echo Compilando el servidor srvProyecto
 	buildserver -v -f $(OBJ)/srvProyecto.o \
 		-f "-I$(INC)" \
-		-l "-L$(ORACLE_HOME)/lib" \
+		-l "-L$(ORACLE_HOME)/lib -lclntsh -lfml32 -ltux `pkg-config --libs gtk+-3.0`" \
 		-o "$(BIN)/srvProyecto -lclntsh" \
 		-s INSERT_PAGO_FML32,SELECT_PAGO_FML32,SELECTALL_PAGO_FML32,UPDATE_PAGO_FML32,DELETE_PAGO_FML32
 
@@ -38,6 +39,7 @@ srvProyecto: $(OBJ)/srvProyecto.o
 cliProyecto: $(OBJ)/cliProyecto.o
 	@echo Compilando el cliente cliProyecto
 	buildclient -f $(OBJ)/cliProyecto.o -o $(BIN)/cliProyecto
+		-l "`pkg-config --libs gtk+-3.0`"  # Agregar las bibliotecas de GTK
 
 # Generacion de Ficheros Objeto
 $(OBJ)/srvProyecto.o: $(SRC)/srvProyecto.c
@@ -45,11 +47,11 @@ $(OBJ)/srvProyecto.o: $(SRC)/srvProyecto.c
 	$(CC) -c -I/usr/include/c++/4.8.2/x86_64-redhat-linux \
 		-I$(ORACLE_HOME)/precomp/public -I$(ORACLE_HOME)/rdbms/public -I../inc \
 		-I$(TUXDIR)/include -L$(ORACLE_HOME)/lib -L$(TUXDIR)/lib $(SRC)/srvProyecto.c -o \
-		$(OBJ)/srvProyecto.o -lclntsh -lfml32 -ltux
+		$(OBJ)/srvProyecto.o $(GTK_FLAGS)
 
 $(OBJ)/cliProyecto.o: $(SRC)/cliProyecto.c
 	$(CC) -c -I../inc -I$(TUXDIR)/include $(SRC)/cliProyecto.c -o \
-		$(OBJ)/cliProyecto.o
+		$(OBJ)/cliProyecto.o $(GTK_FLAGS)  # Agregar las banderas de GTK
 
 # Borrado
 cleanAll:
