@@ -271,6 +271,59 @@ void enviar_solicitud_actualizacion(GtkWidget *widget, pagos *pgs) {
     tpterm();
 }
 
+// Función para enviar la solicitud de eliminación al servidor
+void enviar_solicitud_eliminar(GtkWidget *widget, pagos *pgs) {
+    long lvL_tamLongt;
+
+    // Obtener el número de pago ingresado
+    const gchar *num_pago_str = gtk_entry_get_text(GTK_ENTRY(pgs->num_entry));
+    pgs->numpago = atoi(num_pago_str);
+
+    // Conectar con el servidor Tuxedo
+    if (tpinit((TPINIT *)NULL) == -1) {
+        gtk_label_set_text(GTK_LABEL(pgs->output_label), "Error en la conexión");
+        return;
+    }
+
+    // Reservar espacio para el buffer FML
+    FBFR32 *fbfr;
+    if ((fbfr = (FBFR32 *)tpalloc("FML32", NULL, 1024)) == NULL) {
+        gtk_label_set_text(GTK_LABEL(pgs->output_label), "Error reservando espacio para el buffer FML");
+        tpterm();
+        return;
+    }
+
+    // Agregar el número de pago al buffer FML
+    if (Fchg32(fbfr, NUMPAGO, 0, (char *)&pgs->numpago, 0) < 0) {
+        gtk_label_set_text(GTK_LABEL(pgs->output_label), "Error actualizando campo FML (NUMPAGO)");
+        tpfree((char *)fbfr);
+        tpterm();
+        return;
+    }
+
+    // Llamar al servicio 'DELETE_PAGO_FML32'
+    if (tpcall("DELETE_PAGO_FML32", (char *)fbfr, 0, (char **)&fbfr, &lvL_tamLongt, 0L) == -1) {
+        gtk_label_set_text(GTK_LABEL(pgs->output_label), "Error en la llamada al servicio");
+        tpfree((char *)fbfr);
+        tpterm();
+        return;
+    }
+
+    // Obtener el resultado del buffer FML y mostrarlo en la interfaz
+    gchar *output_text = "Respuesta del servidor:\n";
+    FLDLEN32 flen;
+    char *valor;
+    if ((valor = (char *)Ffind32(fbfr, OUTPUT, 0, &flen)) != NULL) {
+        output_text = g_strdup_printf("%s%s\n", output_text, valor);
+    }
+    gtk_label_set_text(GTK_LABEL(pgs->output_label), output_text);
+    g_free(output_text);
+
+    // Liberar el buffer y desconectar del servidor
+    tpfree((char *)fbfr);
+    tpterm();
+}
+
 
 int main(int argc, char *argv[]) {
     GtkWidget *window;
@@ -283,6 +336,7 @@ int main(int argc, char *argv[]) {
     GtkWidget *button_search;
     GtkWidget *button_update;
     GtkWidget *button;
+    GtkWidget *box;
     pagos pgs;
 
     gtk_init(&argc, &argv);
@@ -420,6 +474,28 @@ int main(int argc, char *argv[]) {
     // Crear una etiqueta para mostrar los resultados de la solicitud
     pgs.output_label = gtk_label_new("");
     gtk_box_pack_start(GTK_BOX(box_solicitud), pgs.output_label, FALSE, FALSE, 0);
+
+    // Pestaña de eliminación
+    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(box), 10);
+
+    label = gtk_label_new("Eliminar Pago");
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), box, label);
+
+    // Crear etiqueta y campo de entrada para el número de pago
+    label = gtk_label_new("Número de pago a borrar:");
+    gtk_box_pack_start(GTK_BOX(box), label, FALSE, FALSE, 0);
+    pgs.num_entry = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(box), pgs.num_entry, FALSE, FALSE, 0);
+
+    // Crear un botón para enviar la solicitud de eliminación
+    button = gtk_button_new_with_label("Eliminar Pago");
+    g_signal_connect(button, "clicked", G_CALLBACK(enviar_solicitud_eliminar), &pgs);
+    gtk_box_pack_start(GTK_BOX(box), button, FALSE, FALSE, 0);
+
+    // Crear una etiqueta para mostrar los resultados
+    pgs.output_label = gtk_label_new("");
+    gtk_box_pack_start(GTK_BOX(box), pgs.output_label, FALSE, FALSE, 0);
 
     gtk_widget_show_all(window);
 
